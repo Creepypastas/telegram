@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.3.2 - messaging web application for MTProto
+ * Webogram v0.3.8 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -129,7 +129,7 @@ angular.module('myApp.directives')
         if (!atBottom && !options.my) {
           return;
         }
-        
+
         var pr = parseInt($(scrollableWrap).css('paddingRight'))
         $(scrollableWrap).addClass('im_history_to_bottom');
         $(scrollable).css({bottom: 0, marginLeft: -Math.ceil(pr / 2)});

@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.3.2 - messaging web application for MTProto
+ * Webogram v0.3.8 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -32,14 +32,27 @@ angular.module('myApp.filters', ['myApp.i18n'])
   .filter('userStatus', function($filter, _) {
     var relativeTimeFilter = $filter('relativeTime');
     return function (user) {
-      if (!user || !user.status || user.status._ == 'userStatusEmpty') {
-        return _('user_status_offline');
-      }
-      if (user.status._ == 'userStatusOnline') {
-        return _('user_status_online');
-      }
+      var statusType = user && user.status && user.status._ || 'userStatusEmpty';
+      switch (statusType) {
+        case 'userStatusOnline':
+          return _('user_status_online');
 
-      return _('user_status_last_seen', relativeTimeFilter(user.status.was_online));
+        case 'userStatusOffline':
+          return _('user_status_last_seen', relativeTimeFilter(user.status.was_online));
+
+        case 'userStatusRecently':
+          return _('user_status_recently');
+
+        case 'userStatusLastWeek':
+          return _('user_status_last_week');
+
+        case 'userStatusLastMonth':
+          return _('user_status_last_month');
+
+        case 'userStatusEmpty':
+        default:
+          return _('user_status_long_ago');
+      }
     }
   })
 
@@ -53,26 +66,22 @@ angular.module('myApp.filters', ['myApp.i18n'])
   })
 
   .filter('dateOrTime', function($filter) {
-    var cachedDates = {},
-        dateFilter = $filter('date');
+    var dateFilter = $filter('date');
 
-    return function (timestamp) {
-
-      if (cachedDates[timestamp]) {
-        return cachedDates[timestamp];
-      }
+    return function (timestamp, extended) {
 
       var ticks = timestamp * 1000,
           diff = Math.abs(tsNow() - ticks),
           format = 'shortTime';
 
       if (diff > 518400000) { // 6 days
-        format = 'shortDate';
+        format = extended ? 'mediumDate' : 'shortDate';
       }
       else if (diff > 43200000) { // 12 hours
-        format = 'EEE';
+        format = extended ? 'EEEE' : 'EEE';
       }
-      return cachedDates[timestamp] = dateFilter(ticks, format);
+
+      return dateFilter(ticks, format);
     }
   })
 
@@ -120,6 +129,14 @@ angular.module('myApp.filters', ['myApp.i18n'])
     }
   }])
 
+  .filter('durationRemains', function($filter) {
+    var durationFilter = $filter('duration');
+
+    return function (done, total) {
+      return '-' + durationFilter(total - done);
+    }
+  })
+
   .filter('phoneNumber', [function() {
     return function (phoneRaw) {
       var nbsp = ' ';
@@ -140,13 +157,13 @@ angular.module('myApp.filters', ['myApp.i18n'])
         return size + ' b';
       }
       else if (size < 1048576) {
-        return (Math.round(size / 1024 * 10) / 10) + ' Kb';
+        return Math.round(size / 1024) + ' Kb';
       }
       var mbs = size / 1048576;
       if (progressing) {
         mbs = mbs.toFixed(1);
       } else {
-        mbs = (Math.round(mbs * 100) / 100);
+        mbs = (Math.round(mbs * 10) / 10);
       }
       return mbs + ' Mb';
     }
@@ -192,14 +209,14 @@ angular.module('myApp.filters', ['myApp.i18n'])
       if (diff < 60000) {
         return _('relative_time_just_now');
       }
-      if (diff < 3000000) {
-        var minutes = Math.ceil(diff / 60000);
+      if (diff < 3600000) {
+        var minutes = Math.floor(diff / 60000);
         return langMinutesPluralize(minutes);
       }
-      if (diff < 10000000) {
-        var hours = Math.ceil(diff / 3600000);
+      if (diff < 86400000) {
+        var hours = Math.floor(diff / 3600000);
         return langHoursPluralize(hours);
       }
-      return dateOrTimeFilter(timestamp);
+      return dateOrTimeFilter(timestamp, true);
     }
   })

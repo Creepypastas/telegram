@@ -24,7 +24,7 @@
 
       <a class="im_message_from_photo pull-left" my-user-photolink="historyMessage.from_id" img-class="im_message_from_photo"></a>
 
-      <div class="im_message_meta pull-right text-right">
+      <div class="im_message_meta">
         <i class="icon-message-status-tick"></i>
         <span class="im_message_date" ng-bind="::historyMessage.date | time"></span>
       </div>
@@ -41,12 +41,17 @@
         <div ng-if="::historyMessage.media || false" class="im_message_media" ng-switch="historyMessage.media._">
 
           <div ng-switch-when="messageMediaPhoto"     my-message-photo></div>
-          <div ng-switch-when="messageMediaVideo"     my-message-video></div>
-          <div ng-switch-when="messageMediaDocument"  my-message-document></div>
-          <div ng-switch-when="messageMediaAudio"     my-message-audio></div>
+          <div ng-switch-when="messageMediaVideo"     my-message-video="historyMessage.media.video" message-id="historyMessage.id"></div>
+          <div ng-switch-when="messageMediaDocument"  my-message-document="historyMessage.media.document" message-id="historyMessage.id"></div>
+          <div ng-switch-when="messageMediaAudio"     class="im_message_audio" my-audio-player audio="historyMessage.media.audio"></div>
           <div ng-switch-when="messageMediaGeo"       my-message-map></div>
-          <div ng-switch-when="messageMediaContact"   my-message-contact></div>
+          <div ng-switch-when="messageMediaContact"   class="im_message_contact" my-message-contact></div>
           <div ng-switch-when="messageMediaPending"   my-message-pending></div>
+          <div ng-switch-when="messageMediaUnsupported">
+            <div class="im_message_text">
+              The message is not supported on your version of Telegram Web. Update the app to view: <a href="https://web.telegram.org">web.telegram.org</a>.
+            </div>
+          </div>
 
         </div>
 

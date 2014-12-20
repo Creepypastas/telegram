@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.3.2 - messaging web application for MTProto
+ * Webogram v0.3.8 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -39,10 +39,12 @@ function checkDragEvent(e) {
 
 function cancelEvent (event) {
   event = event || window.event;
-  if (event) event = event.originalEvent || event;
+  if (event) {
+    event = event.originalEvent || event;
 
-  if (event.stopPropagation) event.stopPropagation();
-  if (event.preventDefault) event.preventDefault();
+    if (event.stopPropagation) event.stopPropagation();
+    if (event.preventDefault) event.preventDefault();
+  }
 
   return false;
 }
@@ -61,7 +63,7 @@ function onContentLoaded (cb) {
 };
 
 function tsNow (seconds) {
-  var t = +new Date();
+  var t = +new Date() + (window.tsOffset || 0);
   return seconds ? Math.floor(t / 1000) : t;
 }
 
@@ -112,3 +114,66 @@ function templateUrl (tplName) {
   return 'partials/' + (Config.Mobile ? 'mobile' : 'desktop') + '/' + tplName + '.html';
 }
 
+function encodeEntities(value) {
+  return value.
+    replace(/&/g, '&amp;').
+    replace(/([^\#-~| |!])/g, function (value) { // non-alphanumeric
+      return '&#' + value.charCodeAt(0) + ';';
+    }).
+    replace(/</g, '&lt;').
+    replace(/>/g, '&gt;');
+}
+
+function calcImageInBox(imageW, imageH, boxW, boxH, noZooom) {
+  var boxedImageW = boxW;
+  var boxedImageH = boxH;
+
+  if ((imageW / imageH) > (boxW / boxH)) {
+    boxedImageH = parseInt(imageH * boxW / imageW);
+  }
+  else {
+    boxedImageW = parseInt(imageW * boxH / imageH);
+    if (boxedImageW > boxW) {
+      boxedImageH = parseInt(boxedImageH * boxW / boxedImageW);
+      boxedImageW = boxW;
+    }
+  }
+
+  // if (Config.Navigator.retina) {
+  //   imageW = Math.floor(imageW / 2);
+  //   imageH = Math.floor(imageH / 2);
+  // }
+
+  if (noZooom && boxedImageW >= imageW && boxedImageH >= imageH) {
+    boxedImageW = imageW;
+    boxedImageH = imageH;
+  }
+
+  return {w: boxedImageW, h: boxedImageH};
+}
+
+function versionCompare (ver1, ver2) {
+    if (typeof ver1 !== 'string') {
+      ver1 = '';
+    }
+    if (typeof ver2 !== 'string') {
+      ver2 = '';
+    }
+    ver1 = ver1.replace(/^\s+|\s+$/g, '').split('.');
+    ver2 = ver2.replace(/^\s+|\s+$/g, '').split('.');
+
+    var a = Math.max(ver1.length, ver2.length), i;
+
+    for (i = 0; i < a; i++) {
+      if (ver1[i] == ver2[i]) {
+        continue;
+      }
+      if (ver1[i] > ver2[i]) {
+        return 1;
+      } else {
+        return -1;
+      }
+    }
+
+    return 0;
+  }
