@@ -15,8 +15,8 @@
       <div class="im_dialogs_panel">
         <div class="im_dialogs_search">
           <input my-focused class="form-control im_dialogs_search_field no_outline" type="search" placeholder="{{'modal_search' | i18n}}" ng-model="search.query"/>
-          <a class="im_dialogs_search_clear" ng-click="search.query = ''" ng-show="search.query.length">
-            <i class="im_dialogs_search_clear"></i>
+          <a class="im_dialogs_search_clear tg_search_clear" ng-click="search.query = ''" ng-show="search.query.length">
+            <i class="icon icon-search-clear"></i>
           </a>
         </div>
       </div>
@@ -34,7 +34,7 @@
                     <div class="im_dialog_photo pull-left" my-peer-photolink="::contact.userID" img-class="im_dialog_photo"></div>
                     <div class="im_dialog_message_wrap">
                       <div class="im_dialog_peer">
-                        <span class="im_dialog_user" ng-bind-html="contact.user.rFullName"></span>
+                        <span class="im_dialog_user" my-user-link="contact.userID"></span>
                       </div>
                       <div class="im_dialog_message">
                         <span class="im_dialog_message_text" my-user-status="::contact.userID"></span>
@@ -52,7 +52,7 @@
   </div>
 
   <div class="md_modal_footer peer_select_modal_footer clearfix" ng-if="multiSelect">
-    <button class="btn btn-md pull-right" ng-click="submitSelected()" my-i18n="conversations_modal_forward_submit"></button>
+    <button class="btn btn-md btn-md-primary pull-right" ng-click="submitSelected()" my-i18n="conversations_modal_forward_submit"></button>
 
     <div class="peer_select_modal_recipients_wrap" ng-switch="!selectedCount">
       <span class="peer_select_modal_recipients_empty" ng-switch-when="true" my-i18n="conversations_modal_select_recipients"></span>

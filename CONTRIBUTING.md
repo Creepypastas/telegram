@@ -8,7 +8,7 @@ Go to our [issue tracker](https://github.com/zhukov/webogram/issues) and check i
 
 ### Localization
 
-If you don't see your native language available for Webogram and you can help with translation, please consult the [Telegram Translations Manual](core.telegram.org/translating_telegram).
+If you don't see your native language available for Webogram and you can help with translation, please consult the [Telegram Translations Manual](https://core.telegram.org/translating_telegram).
 
 To test your translation live, use [Localization guide](/app/js/locales/README.md).
 
@@ -43,9 +43,9 @@ $ git push origin improve-contacts-99
 
 * Do a new pull request from your "improve-contacts-99" branch to webogram "master".
 
-#### How do changes suggested on a pull request
+#### How to implement changes suggested on a pull request
 
-Some times when you do a PR, you will be asked to correct some code. You can do it on your work branch and commit normally, PR will be automatically updated.
+Sometimes when you submit a PR, you will be asked to correct some code. You can make the changes on your work branch and commit normally and the PR will be automatically updated.
 
 ``$ git commit -am "Ops, fixing typo"``
 

@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.3.8 - messaging web application for MTProto
+ * Webogram v0.4.2 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -225,6 +225,13 @@ angular.module('myApp.directives', ['myApp.filters'])
                 '&amp;auto_play=false&amp;hide_related=true&amp;show_comments=false&amp;show_user=true&amp;show_reposts=false&amp;visual=true"></' + embedTag + '></div>';
           break;
 
+        case 'spotify':
+          var spotifyUrl = embedData[1];
+          html = '<div class="im_message_media_embed im_message_spotify_embed"><' + embedTag + ' type="text/html" frameborder="0" allowtransparency="true" ' +
+           'src="https://embed.spotify.com/?uri=spotify:' + encodeEntities(encodeURIComponent(spotifyUrl)) +
+           '"></' + embedTag + '></div>';
+          break;
+
         case 'twitter':
           html = '<div class="im_message_twitter_embed"><blockquote class="twitter-tweet" lang="en"><a href="' + embedData[1] + '"></a></blockquote></div>';
 
@@ -320,6 +327,78 @@ angular.module('myApp.directives', ['myApp.filters'])
       templateUrl: templateUrl('message_service')
     };
   })
+
+  .directive('myReplyMessage', function(AppPhotosManager, AppMessagesManager, AppPeersManager, $rootScope) {
+
+    return {
+      templateUrl: templateUrl('reply_message'),
+      scope: {
+        'replyMessage': '=myReplyMessage'
+      },
+      link: link
+    };
+
+    function link ($scope, element, attrs) {
+      var message = $scope.replyMessage;
+      if (!message.loading) {
+        updateMessage($scope, element);
+      } else {
+        var messageID = message.id;
+        var stopWaiting = $scope.$on('messages_downloaded', function (e, msgIDs) {
+          if (msgIDs.indexOf(messageID) != -1) {
+            $scope.replyMessage = AppMessagesManager.wrapForDialog(messageID);
+            updateMessage($scope, element);
+            stopWaiting();
+          }
+        });
+      }
+    }
+
+    function updateMessage($scope, element) {
+      var message = $scope.replyMessage;
+      var thumbWidth = 42;
+      var thumbHeight = 42;
+      var thumbPhotoSize;
+      if (message.media) {
+        switch (message.media._) {
+          case 'messageMediaPhoto':
+            thumbPhotoSize = AppPhotosManager.choosePhotoSize(message.media.photo, thumbWidth, thumbHeight);
+            break;
+
+          case 'messageMediaDocument':
+            thumbPhotoSize = message.media.document.thumb;
+            break;
+
+          case 'messageMediaVideo':
+            thumbPhotoSize = message.media.video.thumb;
+            break;
+        }
+      }
+
+      if (thumbPhotoSize && thumbPhotoSize._ != 'photoSizeEmpty') {
+        var dim = calcImageInBox(thumbPhotoSize.w, thumbPhotoSize.h, thumbWidth, thumbHeight, true);
+
+        $scope.thumb = {
+          width: dim.w,
+          height: dim.h,
+          location: thumbPhotoSize.location,
+          size: thumbPhotoSize.size
+        };
+      }
+
+      if (element[0].tagName == 'A') {
+        element.on('click', function () {
+          var peerID = AppMessagesManager.getMessagePeer(message);
+          var peerString = AppPeersManager.getPeerString(peerID);
+
+          $rootScope.$broadcast('history_focus',  {peerString: peerString, messageID: message.id});
+
+        })
+      }
+    }
+
+  })
+
   .directive('myMessagePhoto', function() {
     return {
       templateUrl: templateUrl('message_attach_photo')
@@ -413,7 +492,7 @@ angular.module('myApp.directives', ['myApp.filters'])
         $scope.$broadcast('ui_dialogs_search');
         $($window).scrollTop(0);
         $timeout(function () {
-          searchField.focus();
+          setFieldSelection(searchField);
         })
       });
 
@@ -434,6 +513,15 @@ angular.module('myApp.directives', ['myApp.filters'])
         $(document).off('keydown', onKeyDown);
       });
 
+      $scope.$on('ui_dialogs_change', function () {
+        onContentLoaded(function () {
+          var selectedDialog = $(scrollableWrap).find('.active a.im_dialog')[0];
+          if (selectedDialog) {
+            scrollToDialog(selectedDialog.parentNode);
+          }
+        });
+      });
+
       function onKeyDown(e) {
         if (!searchFocused && $modalStack.getTop()) {
           return true;
@@ -451,13 +539,16 @@ angular.module('myApp.directives', ['myApp.filters'])
 
         if (e.keyCode == 27 || e.keyCode == 9 && e.shiftKey && !e.ctrlKey && !e.metaKey) { // ESC or Shift + Tab
           if (!searchFocused) {
-            searchField.focus();
+            setFieldSelection(searchField);
             if (searchField.value) {
               searchField.select();
             }
           }
           else if (searchField.value) {
             $(searchClear).trigger('click');
+          }
+          else {
+            $scope.$emit('esc_no_more');
           }
           return cancelEvent(e);
         }
@@ -523,24 +614,26 @@ angular.module('myApp.directives', ['myApp.filters'])
           }
 
           if (nextDialogWrap) {
-            var elTop = nextDialogWrap.offsetTop,
-                elHeight = nextDialogWrap.offsetHeight,
-                scrollTop = scrollableWrap.scrollTop,
-                viewportHeight = scrollableWrap.clientHeight;
-
-
-            if (scrollTop > elTop) {
-              scrollableWrap.scrollTop = elTop;
-              $(dialogsWrap).nanoScroller({flash: true});
-            }
-            else if (scrollTop < elTop + elHeight - viewportHeight) {
-              scrollableWrap.scrollTop = elTop + elHeight - viewportHeight;
-              $(dialogsWrap).nanoScroller({flash: true});
-            }
-
+            scrollToDialog(nextDialogWrap);
           }
 
           return cancelEvent(e);
+        }
+      }
+
+      function scrollToDialog(dialogWrap) {
+        var elTop = dialogWrap.offsetTop,
+            elHeight = dialogWrap.offsetHeight,
+            scrollTop = scrollableWrap.scrollTop,
+            viewportHeight = scrollableWrap.clientHeight;
+
+        if (scrollTop > elTop) {
+          scrollableWrap.scrollTop = elTop;
+          $(dialogsWrap).nanoScroller({flash: true});
+        }
+        else if (scrollTop < elTop + elHeight - viewportHeight) {
+          scrollableWrap.scrollTop = elTop + elHeight - viewportHeight;
+          $(dialogsWrap).nanoScroller({flash: true});
         }
       }
 
@@ -647,10 +740,14 @@ angular.module('myApp.directives', ['myApp.filters'])
         if (!dialogsColWrap || !dialogsColWrap.offsetHeight) {
           dialogsColWrap = $('.im_dialogs_col_wrap')[0];
         }
+        var footerHeight = footer ? footer.offsetHeight : 0;
+        if (footerHeight) {
+          footerHeight++; // Border bottom
+        }
         $(element).css({
           height: $($window).height() -
-                  (footer ? footer.offsetHeight : 0)  -
-                  (headWrap ? headWrap.offsetHeight : 44) -
+                  footerHeight -
+                  (headWrap ? headWrap.offsetHeight : 48) -
                   (panelWrap ? panelWrap.offsetHeight : 58) -
                   parseInt($(dialogsColWrap).css('paddingBottom') || 0)
         });
@@ -746,7 +843,6 @@ angular.module('myApp.directives', ['myApp.filters'])
           historyEl = $('.im_history', element)[0],
           scrollableWrap = $('.im_history_scrollable_wrap', element)[0],
           scrollable = $('.im_history_scrollable', element)[0],
-          panelWrap = $('.im_history_panel_wrap', element)[0],
           bottomPanelWrap = $('.im_bottom_panel_wrap', element)[0],
           sendFormWrap = $('.im_send_form_wrap', element)[0],
           headWrap = $('.tg_page_head')[0],
@@ -784,6 +880,16 @@ angular.module('myApp.directives', ['myApp.filters'])
 
       $scope.$on('ui_history_append_new', function (e, options) {
         if (!atBottom && !options.my) {
+          onContentLoaded(function () {
+            $(historyWrap).nanoScroller();
+          });
+          return;
+        }
+        if (options.idleScroll) {
+          onContentLoaded(function () {
+            $(historyWrap).nanoScroller();
+            changeScroll();
+          });
           return;
         }
         var curAnimated = animated &&
@@ -794,7 +900,8 @@ angular.module('myApp.directives', ['myApp.filters'])
         if (curAnimated) {
           wasH = scrollableWrap.scrollHeight;
         } else {
-          $(scrollable).css({bottom: 0});
+          var pr = parseInt($(scrollableWrap).css('paddingRight'))
+          $(scrollable).css({bottom: 0, paddingRight: pr});
           $(scrollableWrap).addClass('im_history_to_bottom');
         }
 
@@ -815,7 +922,7 @@ angular.module('myApp.directives', ['myApp.filters'])
             });
           } else {
             $(scrollableWrap).removeClass('im_history_to_bottom');
-            $(scrollable).css({bottom: ''});
+            $(scrollable).css({bottom: '', paddingRight: 0});
             scrollableWrap.scrollTop = scrollableWrap.scrollHeight;
             updateBottomizer();
           }
@@ -855,10 +962,10 @@ angular.module('myApp.directives', ['myApp.filters'])
         var pr = parseInt($(scrollableWrap).css('paddingRight'))
         $(scrollableWrap).addClass('im_history_to_bottom');
         scrollableWrap.scrollHeight; // Some strange Chrome bug workaround
-        $(scrollable).css({bottom: 0, marginLeft: -Math.ceil(pr / 2)});
+        $(scrollable).css({bottom: 0, paddingRight: pr});
         onContentLoaded(function () {
           $(scrollableWrap).removeClass('im_history_to_bottom');
-          $(scrollable).css({bottom: '', marginLeft: ''});
+          $(scrollable).css({bottom: '', paddingRight: ''});
           updateSizes(true);
           moreNotified = false;
           lessNotified = false;
@@ -886,14 +993,15 @@ angular.module('myApp.directives', ['myApp.filters'])
 
         $(scrollableWrap).addClass('im_history_to_bottom');
         scrollableWrap.scrollHeight; // Some strange Chrome bug workaround
-        $(scrollable).css({bottom: -(sh - st - ch), marginLeft: -Math.ceil(pr / 2)});
+        $(scrollable).css({bottom: -(sh - st - ch), paddingRight: pr});
 
         var upd = function () {
             $(scrollableWrap).removeClass('im_history_to_bottom');
-            $(scrollable).css({bottom: '', marginLeft: ''});
+            $(scrollable).css({bottom: '', paddingRight: ''});
             if (scrollTopInitial >= 0) {
               changeScroll();
             } else {
+              // console.log('change scroll prepend');
               scrollableWrap.scrollTop = st + scrollableWrap.scrollHeight - sh;
             }
 
@@ -1001,7 +1109,11 @@ angular.module('myApp.directives', ['myApp.filters'])
         if (!footer || !footer.offsetHeight) {
           footer = $('.footer_wrap')[0];
         }
-        var historyH = $($window).height() - panelWrap.offsetHeight - bottomPanelWrap.offsetHeight - (headWrap ? headWrap.offsetHeight : 44) - (footer ? footer.offsetHeight : 0);
+        var footerHeight = footer ? footer.offsetHeight : 0;
+        if (footerHeight) {
+          footerHeight++; // Border bottom
+        }
+        var historyH = $($window).height() - bottomPanelWrap.offsetHeight - (headWrap ? headWrap.offsetHeight : 48) - footerHeight;
         $(historyWrap).css({
           height: historyH
         });
@@ -1024,7 +1136,7 @@ angular.module('myApp.directives', ['myApp.filters'])
         var marginTop = scrollableWrap.offsetHeight
                         - historyMessagesEl.offsetHeight
                         - 20
-                        - (Config.Mobile ? 0 : 49);
+                        - (Config.Mobile ? 0 : 39);
 
         if (historyMessagesEl.offsetHeight > 0 && marginTop > 0) {
           $(historyMessagesEl).css({marginTop: marginTop});
@@ -1040,148 +1152,134 @@ angular.module('myApp.directives', ['myApp.filters'])
 
   })
 
-  .directive('mySendForm', function ($timeout, $modalStack, $http, $interpolate, Storage, ErrorService) {
+  .directive('mySendForm', function ($timeout, $compile, $modalStack, $http, $interpolate, Storage, AppStickersManager, ErrorService) {
 
     return {
       link: link,
       scope: {
-        draftMessage: '='
+        draftMessage: '=',
+        mentions: '='
       }
     };
 
     function link ($scope, element, attrs) {
-      var messageField = $('textarea', element)[0],
-          fileSelects = $('input', element),
-          dropbox = $('.im_send_dropbox_wrap', element)[0],
-          emojiButton = $('.im_emoji_btn', element)[0],
-          editorElement = messageField,
-          dragStarted, dragTimeout,
-          emojiArea = $(messageField).emojiarea({button: emojiButton, norealTime: true}),
-          emojiMenu = $('.emoji-menu', element)[0],
-          submitBtn = $('.im_submit', element)[0],
-          richTextarea = $('.emoji-wysiwyg-editor', element)[0];
 
-      if (richTextarea) {
-        editorElement = richTextarea;
-        $(richTextarea).addClass('form-control');
-        $(richTextarea).attr('placeholder', $interpolate($(messageField).attr('placeholder'))($scope));
+      var messageField = $('textarea', element)[0];
+      var emojiButton = $('.composer_emoji_insert_btn', element)[0];
+      var emojiPanel = $('.composer_emoji_panel', element)[0];
+      var fileSelects = $('input', element);
+      var dropbox = $('.im_send_dropbox_wrap', element)[0];
+      var messageFieldWrap = $('.im_send_field_wrap', element)[0];
+      var dragStarted, dragTimeout;
+      var submitBtn = $('.im_submit', element)[0];
 
-        var updatePromise;
-        $(richTextarea)
-          .on('DOMNodeInserted', onPastedImageEvent)
-          .on('keyup', function (e) {
-            updateHeight();
-
-            if (!sendAwaiting) {
-              $scope.$apply(function () {
-                $scope.draftMessage.text = richTextarea.textContent;
-              });
-            }
-
-            $timeout.cancel(updatePromise);
-            updatePromise = $timeout(updateValue, 1000);
+      new EmojiTooltip(emojiButton, {
+        getStickers: function (callback) {
+          AppStickersManager.getStickers().then(function () {
+            AppStickersManager.getStickersImages().then(function (stickersData) {
+              callback(stickersData);
+            });
           });
+        },
+        onEmojiSelected: function (code) {
+          $scope.$apply(function () {
+            composer.onEmojiSelected(code);
+          })
+        },
+        onStickerSelected: function (docID) {
+          $scope.$apply(function () {
+            $scope.draftMessage.sticker = docID;
+          });
+        }
+      });
+
+      var composerEmojiPanel;
+      if (emojiPanel) {
+        composerEmojiPanel = new EmojiPanel(emojiPanel, {
+          onEmojiSelected: function (code) {
+            composer.onEmojiSelected(code);
+          }
+        });
       }
 
-      // Head is sometimes slower
-      $timeout(function () {
-        fileSelects
-          .on('change', function () {
-            var self = this;
-            $scope.$apply(function () {
-              $scope.draftMessage.files = Array.prototype.slice.call(self.files);
-              $scope.draftMessage.isMedia = $(self).hasClass('im_media_attach_input') || Config.Mobile;
-              setTimeout(function () {
-                try {
-                  self.value = '';
-                } catch (e) {};
-              }, 1000);
-            });
+      var peerPhotoCompiled = $compile('<span class="composer_user_photo" my-peer-photolink="peerID" img-class="composer_user_photo"></span>');
+      var cachedPeerPhotos = {};
+
+      var composer = new MessageComposer(messageField, {
+        onTyping: function () {
+          $scope.$emit('ui_typing');
+        },
+        getSendOnEnter: function () {
+          return sendOnEnter;
+        },
+        getPeerImage: function (element, peerID) {
+          if (cachedPeerPhotos[peerID]) {
+            element.replaceWith(cachedPeerPhotos[peerID]);
+            return;
+          }
+          var scope = $scope.$new(true);
+          scope.peerID = peerID;
+          peerPhotoCompiled(scope, function (clonedElement) {
+            cachedPeerPhotos[peerID] = clonedElement;
+            element.replaceWith(clonedElement);
           });
-      }, 1000);
+        },
+        mentions: $scope.mentions,
+        onMessageSubmit: onMessageSubmit,
+        onFilePaste: onFilePaste
+      });
 
-      var sendOnEnter = true,
-          updateSendSettings = function () {
-            Storage.get('send_ctrlenter').then(function (sendOnCtrl) {
-              sendOnEnter = !sendOnCtrl;
-            });
-          };
+      var richTextarea = composer.richTextareaEl[0];
+      if (richTextarea) {
+        $(richTextarea)
+          .attr('placeholder', $interpolate($(messageField).attr('placeholder'))($scope))
+          .on('keydown keyup', updateHeight);
+      }
 
+      fileSelects.on('change', function () {
+        var self = this;
+        $scope.$apply(function () {
+          $scope.draftMessage.files = Array.prototype.slice.call(self.files);
+          $scope.draftMessage.isMedia = $(self).hasClass('im_media_attach_input') || Config.Mobile;
+          setTimeout(function () {
+            try {
+              self.value = '';
+            } catch (e) {};
+          }, 1000);
+        });
+      });
+
+      var sendOnEnter = true;
+      function updateSendSettings () {
+        Storage.get('send_ctrlenter').then(function (sendOnCtrl) {
+          sendOnEnter = !sendOnCtrl;
+        });
+      };
       $scope.$on('settings_changed', updateSendSettings);
       updateSendSettings();
 
-      $(editorElement).on('keydown', function (e) {
-        if (richTextarea) {
-          updateHeight();
-        }
+      $(submitBtn).on('mousedown touchstart', onMessageSubmit);
 
-        if (e.keyCode == 13) {
-          var submit = false;
-          if (sendOnEnter && !e.shiftKey) {
-            submit = true;
-          } else if (!sendOnEnter && (e.ctrlKey || e.metaKey)) {
-            submit = true;
+      function onMessageSubmit (e) {
+        $scope.$apply(function () {
+          updateValue();
+          $scope.draftMessage.send();
+          composer.resetTyping();
+          if (composerEmojiPanel) {
+            composerEmojiPanel.update();
           }
-
-          if (submit) {
-            $timeout.cancel(updatePromise);
-            updateValue();
-            $scope.draftMessage.send();
-            $(element).trigger('message_send');
-            resetTyping();
-            return cancelEvent(e);
-          }
-        }
-
-      });
-
-      $(submitBtn).on('mousedown touchstart', function (e) {
-        $timeout.cancel(updatePromise);
-        updateValue();
-        $scope.draftMessage.send();
-        $(element).trigger('message_send');
-        resetTyping();
+        });
         return cancelEvent(e);
-      });
-
-      var lastTyping = 0,
-          lastLength;
-      $(editorElement).on('keyup', function (e) {
-        var now = tsNow(),
-            length = (editorElement[richTextarea ? 'textContent' : 'value']).length;
-
-
-        if (now - lastTyping > 5000 && length != lastLength) {
-          lastTyping = now;
-          lastLength = length;
-          $scope.$emit('ui_typing');
-        }
-      });
-
-      function resetTyping () {
-        lastTyping = 0;
-        lastLength = 0;
-      };
-
-      function updateRichTextarea () {
-        if (richTextarea) {
-          $timeout.cancel(updatePromise);
-          var html = $('<div>').text($scope.draftMessage.text || '').html();
-          html = html.replace(/\n/g, '<br/>');
-          $(richTextarea).html(html);
-          lastLength = html.length;
-          updateHeight();
-        }
       }
 
       function updateValue () {
         if (richTextarea) {
-          $(richTextarea).trigger('change');
+          composer.onChange();
           updateHeight();
         }
       }
 
-      var height = richTextarea.offsetHeight;
+      var height = richTextarea && richTextarea.offsetHeight;
       function updateHeight () {
         var newHeight = richTextarea.offsetHeight;
         if (height != newHeight) {
@@ -1192,7 +1290,7 @@ angular.module('myApp.directives', ['myApp.filters'])
 
       function onKeyDown(e) {
         if (e.keyCode == 9 && !e.shiftKey && !e.ctrlKey && !e.metaKey && !$modalStack.getTop()) { // TAB
-          editorElement.focus();
+          composer.focus();
           return cancelEvent(e);
         }
       }
@@ -1207,49 +1305,52 @@ angular.module('myApp.directives', ['myApp.filters'])
         $scope.$on('ui_history_change', focusField);
       }
 
-      $scope.$on('ui_peer_change', resetTyping);
-      $scope.$on('ui_peer_draft', updateRichTextarea);
+      $scope.$on('ui_peer_change', composer.resetTyping.bind(composer));
+      $scope.$on('ui_peer_draft', function () {
+        if (richTextarea) {
+          composer.setValue($scope.draftMessage.text || '');
+          updateHeight();
+        }
+        if (!Config.Navigator.touch) {
+          composer.focus();
+        }
+      });
+      $scope.$on('ui_peer_reply', function () {
+        onContentLoaded(function () {
+          $scope.$emit('ui_editor_resize');
+          if (!Config.Navigator.touch) {
+            composer.focus();
+          }
+        })
+      });
+
+      $scope.$on('mentions_update', function () {
+        composer.onMentionsUpdated();
+      });
 
       var sendAwaiting = false;
       $scope.$on('ui_message_before_send', function () {
         sendAwaiting = true;
-        $timeout.cancel(updatePromise);
         updateValue();
       });
       $scope.$on('ui_message_send', function () {
         sendAwaiting = false;
-        focusField();
+        if (!Config.Navigator.touch) {
+          focusField();
+        }
       });
-
 
       function focusField () {
         onContentLoaded(function () {
-          editorElement.focus();
+          composer.focus();
         });
       }
 
-      function onPastedImageEvent (e) {
-        var element = (e.originalEvent || e).target,
-            src = (element || {}).src || '',
-            remove = false;
-
-        if (src.substr(0, 5) == 'data:') {
-          remove = true;
-          var blob = dataUrlToBlob(src);
-          ErrorService.confirm({type: 'FILE_CLIPBOARD_PASTE'}).then(function () {
-            $scope.draftMessage.files = [blob];
-            $scope.draftMessage.isMedia = true;
-          });
-          setZeroTimeout(function () {
-            element.parentNode.removeChild(element);
-          })
-        }
-        else if (src && !src.match(/img\/blank\.gif/)) {
-          var replacementNode = document.createTextNode(' ' + src + ' ');
-          setTimeout(function () {
-            element.parentNode.replaceChild(replacementNode, element);
-          }, 100);
-        }
+      function onFilePaste (blob) {
+        ErrorService.confirm({type: 'FILE_CLIPBOARD_PASTE'}).then(function () {
+          $scope.draftMessage.files = [blob];
+          $scope.draftMessage.isMedia = true;
+        });
       };
 
       function onPasteEvent (e) {
@@ -1290,7 +1391,7 @@ angular.module('myApp.directives', ['myApp.filters'])
           if (e.type == 'dragenter' || e.type == 'dragover') {
             if (dragStateChanged) {
               $(dropbox)
-                .css({height: $(editorElement).height() + 12, width: $(editorElement).width() + 12})
+                .css({height: messageFieldWrap.offsetHeight + 2, width: messageFieldWrap.offsetWidth})
                 .show();
             }
           } else {
@@ -1313,15 +1414,11 @@ angular.module('myApp.directives', ['myApp.filters'])
 
 
       $scope.$on('$destroy', function cleanup() {
-        $('body').off('dragenter dragleave dragover drop', onDragDropEvent);
         $(document).off('paste', onPasteEvent);
         $(document).off('keydown', onKeyDown);
-        $(submitBtn).off('mousedown')
+        $('body').off('dragenter dragleave dragover drop', onDragDropEvent);
+        $(submitBtn).off('mousedown touchstart');
         fileSelects.off('change');
-        if (richTextarea) {
-          $(richTextarea).off('DOMNodeInserted keyup', onPastedImageEvent);
-        }
-        $(editorElement).off('keydown');
       });
 
       if (!Config.Navigator.touch) {
@@ -1606,6 +1703,72 @@ angular.module('myApp.directives', ['myApp.filters'])
     }
   })
 
+  .directive('myLoadSticker', function(MtpApiFileManager, FileManager) {
+
+    var emptySrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    return {
+      link: link,
+      scope: {
+        document: '='
+      }
+    };
+
+    function link ($scope, element, attrs) {
+      var imgElement = $('<img />').appendTo(element);
+
+      var setSrc = function (blob) {
+        if (WebpManager.isWebpSupported()) {
+          imgElement.attr('src', FileManager.getUrl(blob, 'image/webp'));
+          return;
+        }
+        FileManager.getByteArray(blob).then(function (bytes) {
+          imgElement.attr('src', WebpManager.getPngUrlFromData(bytes));
+        });
+      };
+
+      imgElement.css({
+        width: $scope.document.thumb.width,
+        height: $scope.document.thumb.height
+      });
+      element.css({
+        width: $scope.document.thumb.width,
+        height: $scope.document.thumb.height
+      });
+
+      var smallLocation = $scope.document.thumb.location;
+      var fullLocation = {
+        _: 'inputDocumentFileLocation',
+        id: $scope.document.id,
+        access_hash: $scope.document.access_hash,
+        dc_id: $scope.document.dc_id
+      };
+
+
+      var cachedBlob = MtpApiFileManager.getCachedFile(fullLocation);
+      var fullDone = false;
+      if (!cachedBlob) {
+        cachedBlob = MtpApiFileManager.getCachedFile(smallLocation);
+      } else {
+        fullDone = true;
+      }
+      if (cachedBlob) {
+        setSrc(cachedBlob);
+        if (fullDone) {
+          return;
+        }
+      } else {
+        imgElement.attr('src', emptySrc);
+      }
+
+      MtpApiFileManager.downloadFile($scope.document.dc_id, fullLocation, $scope.document.size).then(function (blob) {
+        setSrc(blob);
+      }, function (e) {
+        console.log('Download sticker failed', e, fullLocation);
+      });
+    }
+  })
+
   .directive('myLoadDocument', function(MtpApiFileManager, AppDocsManager, FileManager) {
 
     return {
@@ -1775,7 +1938,7 @@ angular.module('myApp.directives', ['myApp.filters'])
           return false;
         }
         setTimeout(function () {
-          element[0].focus();
+          setFieldSelection(element[0]);
         }, 100);
       }
     };
@@ -1789,7 +1952,7 @@ angular.module('myApp.directives', ['myApp.filters'])
             return false;
           }
           onContentLoaded(function () {
-            element[0].focus();
+            setFieldSelection(element[0]);
           });
         });
       }
@@ -2008,8 +2171,6 @@ angular.module('myApp.directives', ['myApp.filters'])
         onContentLoaded(updateMargin);
       });
 
-
-
     };
 
   })
@@ -2054,10 +2215,17 @@ angular.module('myApp.directives', ['myApp.filters'])
         userID = $scope.$eval(attrs.myUserLink);
         update();
       }
+      if (!attrs.noWatch) {
+        $scope.$on('user_update', function (e, updUserID) {
+          if (userID == updUserID) {
+            update();
+          }
+        });
+      }
     }
   })
 
-  .directive('myUserStatus', function ($filter, $rootScope, AppUsersManager) {
+  .directive('myUserStatus', function ($filter, AppUsersManager) {
 
     var statusFilter = $filter('userStatus'),
         ind = 0,
@@ -2089,11 +2257,142 @@ angular.module('myApp.directives', ['myApp.filters'])
         userID = newUserID;
         update();
       });
-      $rootScope.$on('user_update', function (e, updUserID) {
+      $scope.$on('user_update', function (e, updUserID) {
         if (userID == updUserID) {
           update();
         }
       });
+      statuses[curInd] = update;
+      $scope.$on('$destroy', function () {
+        delete statuses[curInd];
+      });
+    }
+  })
+
+  .directive('myChatLink', function ($timeout, AppChatsManager) {
+
+    return {
+      link: link
+    };
+
+    function link($scope, element, attrs) {
+      var chatID;
+      var update = function () {
+        var chat = AppChatsManager.getChat(chatID);
+
+        element.html(
+          (chat.rTitle || '').valueOf()
+        )
+      };
+
+      if (element[0].tagName == 'A') {
+        element.on('click', function () {
+          AppChatsManager.openChat(chatID);
+        });
+      }
+
+      if (attrs.chatWatch) {
+        $scope.$watch(attrs.myChatLink, function (newChatID) {
+          chatID = newChatID;
+          update();
+        });
+      } else {
+        chatID = $scope.$eval(attrs.myChatLink);
+        update();
+      }
+
+      $scope.$on('chat_update', function (e, updChatID) {
+        if (chatID == updChatID) {
+          update();
+        }
+      });
+    }
+  })
+
+  .directive('myChatStatus', function ($rootScope, _, MtpApiManager, AppChatsManager, AppUsersManager) {
+
+    var ind = 0;
+    var statuses = {};
+
+    var allPluralize = _.pluralize('group_modal_pluralize_participants');
+    var onlinePluralize = _.pluralize('group_modal_pluralize_online_participants');
+
+    var myID = 0;
+    MtpApiManager.getUserID().then(function (newMyID) {
+      myID = newMyID;
+    });
+
+    setInterval(updateAll, 90000);
+
+    return {
+      link: link
+    };
+
+    function updateAll () {
+      angular.forEach(statuses, function (update) {
+        update();
+      });
+    }
+
+    function link($scope, element, attrs) {
+      var chatID;
+      var curInd = ind++;
+      var participantsCount = 0;
+      var participants = {};
+
+      var updateParticipants = function () {
+        participantsCount = 0;
+        participants = {};
+        if (!chatID) {
+          return;
+        }
+        AppChatsManager.getChatFull(chatID).then(function (chatFull) {
+          var participantsVector = (chatFull.participants || {}).participants || [];
+          participantsCount = participantsVector.length;
+          angular.forEach(participantsVector, function (participant) {
+            participants[participant.user_id] = true;
+          });
+          update();
+        });
+      };
+
+      var update = function () {
+        var html = allPluralize(participantsCount);
+        var onlineCount = 0;
+        var wasMe = false;
+        angular.forEach(participants, function (t, userID) {
+          var user = AppUsersManager.getUser(userID);
+          if (user.status && user.status._ == 'userStatusOnline') {
+            if (user.id == myID) {
+              wasMe = true;
+            }
+            onlineCount++;
+          }
+        });
+        if (onlineCount > 1 || onlineCount == 1 && !wasMe) {
+          html = _('group_modal_participants', {total: html, online: onlinePluralize(onlineCount)});
+        }
+
+        element.html(html);
+      };
+
+      $scope.$watch(attrs.myChatStatus, function (newChatID) {
+        chatID = newChatID;
+        updateParticipants();
+      });
+
+      $rootScope.$on('chat_full_update', function (e, updChatID) {
+        if (chatID == updChatID) {
+          updateParticipants();
+        }
+      });
+
+      $rootScope.$on('user_update', function (e, updUserID) {
+        if (participants[updUserID]) {
+          update();
+        }
+      });
+
       statuses[curInd] = update;
       $scope.$on('$destroy', function () {
         delete statuses[curInd];
@@ -2170,6 +2469,8 @@ angular.module('myApp.directives', ['myApp.filters'])
       }
 
       var updatePeerPhoto = function () {
+        var curJump = ++jump;
+
         peerPhoto = peer.photo && angular.copy(peer.photo.photo_small);
 
         var hasPhoto = peerPhoto !== undefined;
@@ -2188,7 +2489,6 @@ angular.module('myApp.directives', ['myApp.filters'])
 
 
         if (hasPhoto) {
-          var curJump = ++jump;
 
           MtpApiFileManager.downloadSmallFile(peer.photo.photo_small).then(function (blob) {
             if (curJump != jump) {
@@ -2206,7 +2506,7 @@ angular.module('myApp.directives', ['myApp.filters'])
       if (element[0].tagName == 'A' && !attrs.noOpen) {
         element.on('click', function (e) {
           if (peerID > 0) {
-            AppUsersManager.openUser(peerID, attrs.userOverride && $eval(attrs.userOverride));
+            AppUsersManager.openUser(peerID, attrs.userOverride && $scope.$eval(attrs.userOverride));
           } else {
             AppChatsManager.openChat(-peerID);
           }
@@ -2314,8 +2614,8 @@ angular.module('myApp.directives', ['myApp.filters'])
 
           downloadPromise.then(function () {
             onContentLoaded(function () {
-              var audioEl = $('audio', element)[0];
-              if (audioEl) {
+              var errorListenerEl = $('audio', element)[0] || element[0];
+              if (errorListenerEl) {
                 var errorAlready = false;
                 var onAudioError = function (event) {
                   if (errorAlready) {
@@ -2335,16 +2635,18 @@ angular.module('myApp.directives', ['myApp.filters'])
                   }
                 };
 
-                audioEl.addEventListener('error', onAudioError, true);
-                $(audioEl).on('$destroy', function () {
+                errorListenerEl.addEventListener('error', onAudioError, true);
+                $scope.$on('$destroy', function () {
                   errorAlready = true;
-                  audioEl.removeEventListener('error', onAudioError);
+                  errorListenerEl.removeEventListener('error', onAudioError);
                 });
               }
-              checkPlayer($scope.mediaPlayer.player);
-              $scope.mediaPlayer.player.setVolume(audioVolume);
-              $scope.mediaPlayer.player.play();
-            })
+              setTimeout(function () {
+                checkPlayer($scope.mediaPlayer.player);
+                $scope.mediaPlayer.player.setVolume(audioVolume);
+                $scope.mediaPlayer.player.play();
+              }, 300);
+            });
           })
         }
       };
@@ -2514,13 +2816,54 @@ angular.module('myApp.directives', ['myApp.filters'])
       });
 
       if (!isDisabled) {
-        input.on('blur focus', function (e) {
+        input.on('blur focus change', function (e) {
           focused = e.type == 'focus';
           element.toggleClass('md-input-focused', focused);
           updateHasValueClass();
         });
       }
 
-
+      $scope.$on('value_updated', function (event, args) {
+        setZeroTimeout(function () {
+          updateHasValueClass();
+        });
+      });
     };
+  })
+
+  .directive('mySubmitOnEnter', function () {
+
+    return {
+      link: link
+    };
+
+    function link($scope, element, attrs) {
+      element.on('keydown', function (event) {
+        if (event.keyCode == 13) {
+          element.trigger('submit');
+        }
+      });
+    };
+  })
+
+  .directive('myScrollToOn', function () {
+
+    return {
+      link: function($scope, element, attrs) {
+        var ev = attrs.myScrollToOn;
+        var doScroll = function () {
+          onContentLoaded(function () {
+            $('html, body').animate({
+              scrollTop: element.offset().top
+            }, 200);
+          });
+        };
+        if (ev == '$init') {
+          doScroll();
+        } else {
+          $scope.$on(ev, doScroll);
+        }
+      }
+    };
+
   })

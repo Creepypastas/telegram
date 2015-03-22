@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.3.8 - messaging web application for MTProto
+ * Webogram v0.4.2 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -12,14 +12,14 @@ angular.module('izhukov.mtproto', ['izhukov.utils'])
 
   var dcOptions = Config.Modes.test
     ? [
-      {id: 1, host: '173.240.5.253', port: 80},
+      {id: 1, host: '149.154.175.10', port: 80},
       {id: 2, host: '149.154.167.40', port: 80},
       {id: 3, host: '174.140.142.5', port: 80}
     ]
     : [
       {id: 1, host: '149.154.175.50', port: 80},
       {id: 2, host: '149.154.167.51', port: 80},
-      {id: 3, host: '174.140.142.6', port: 80},
+      {id: 3, host: '149.154.175.100', port: 80},
       {id: 4, host: '149.154.167.91', port: 80},
       {id: 5, host: '149.154.171.5',   port: 80}
     ];

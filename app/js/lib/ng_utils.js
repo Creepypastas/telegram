@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.3.8 - messaging web application for MTProto
+ * Webogram v0.4.2 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -39,6 +39,11 @@ angular.module('izhukov.utils', [])
     when: function (result) {
       return {then: function (cb) {
         return cb(result);
+      }};
+    },
+    reject: function (result) {
+      return {then: function (cb, badcb) {
+        return badcb(result);
       }};
     }
   }
@@ -109,7 +114,7 @@ angular.module('izhukov.utils', [])
 
   function chooseSaveFile (fileName, ext, mimeType) {
     if (!$window.chrome || !chrome.fileSystem || !chrome.fileSystem.chooseEntry) {
-      return $q.reject();
+      return qSync.reject();
     };
     var deferred = $q.defer();
 
@@ -182,6 +187,27 @@ angular.module('izhukov.utils', [])
     return 'data:' + mimeType + ';base64,' + bytesToBase64(fileData);
   }
 
+  function getByteArray(fileData) {
+    if (fileData instanceof Blob) {
+      var deferred = $q.defer();
+      try {
+        var reader = new FileReader();
+        reader.onloadend = function (e) {
+          deferred.resolve(new Uint8Array(e.target.result));
+        };
+        reader.onerror = function (e) {
+          deferred.reject(e);
+        };
+        reader.readAsArrayBuffer(fileData);
+
+        return deferred.promise;
+      } catch (e) {
+        return $q.reject(e);
+      }
+    }
+    return $q.when(fileData);
+  }
+
   function getDataUrl(blob) {
     var deferred;
     try {
@@ -234,7 +260,18 @@ angular.module('izhukov.utils', [])
       return;
     }
 
+    var popup = false;
+    if (window.safari) {
+      popup = window.open();
+    }
+
     getFileCorrectUrl(blob, mimeType).then(function (url) {
+      if (popup) {
+        try {
+          popup.location.href = url;
+          return;
+        } catch (e) {}
+      }
       var anchor = document.createElementNS('http://www.w3.org/1999/xhtml', 'a');
       anchor.href = url;
       anchor.target  = '_blank';
@@ -254,7 +291,6 @@ angular.module('izhukov.utils', [])
       } catch (e) {
         console.error('Download click error', e);
         try {
-          console.error('Download click error', e);
           anchor[0].click();
         } catch (e) {
           window.open(url, '_blank');
@@ -275,6 +311,7 @@ angular.module('izhukov.utils', [])
     chooseSave: chooseSaveFile,
     getUrl: getUrl,
     getDataUrl: getDataUrl,
+    getByteArray: getByteArray,
     getFileCorrectUrl: getFileCorrectUrl,
     download: downloadFile
   };
@@ -290,9 +327,17 @@ angular.module('izhukov.utils', [])
   var dbVersion = 1;
   var openDbPromise;
   var storageIsAvailable = $window.indexedDB !== undefined &&
-                           $window.IDBTransaction !== undefined &&
-                           navigator.userAgent.indexOf('Safari') == -1;
-                           // As of Safari 8.0 IndexedDB is REALLY slow, no point in it
+                           $window.IDBTransaction !== undefined;
+
+  // IndexedDB is REALLY slow without blob support in Safari 8, no point in it
+  if (storageIsAvailable &&
+      navigator.userAgent.indexOf('Safari') != -1 &&
+      navigator.userAgent.indexOf('Chrome') == -1
+      // && navigator.userAgent.match(/Version\/([67]|8.0.[012])/)
+  ) {
+    storageIsAvailable = false;
+  }
+
   var storeBlobsAvailable = storageIsAvailable || false;
 
   function isAvailable () {
@@ -392,7 +437,7 @@ angular.module('izhukov.utils', [])
   function saveFileBase64(db, fileName, blob) {
     try {
       var reader = new FileReader();
-      reader.readAsDataURL(blob); 
+      reader.readAsDataURL(blob);
     } catch (e) {
       storageIsAvailable = false;
       return $q.reject();
@@ -615,7 +660,7 @@ angular.module('izhukov.utils', [])
         }
       };
 
-  if (Config.Modes.nacl && 
+  if (Config.Modes.nacl &&
       navigator.mimeTypes &&
       navigator.mimeTypes['application/x-pnacl'] !== undefined) {
     var listener = $('<div id="nacl_listener"><embed id="mtproto_crypto" width="0" height="0" src="nacl/mtproto_crypto.nmf" type="application/x-pnacl" /></div>').appendTo($('body'))[0];
@@ -734,115 +779,6 @@ angular.module('izhukov.utils', [])
   };
 })
 
-.service('SearchIndexManager', function () {
-  var badCharsRe = /[`~!@#$%^&*()\-_=+\[\]\\|{}'";:\/?.>,<\s]+/g,
-      trimRe = /^\s+|\s$/g,
-      accentsReplace = {
-        a: /[åáâäà]/g,
-        e: /[éêëè]/g,
-        i: /[íîïì]/g,
-        o: /[óôöò]/g,
-        u: /[úûüù]/g,
-        c: /ç/g,
-        ss: /ß/g
-      }
-
-  return {
-    createIndex: createIndex,
-    indexObject: indexObject,
-    cleanSearchText: cleanSearchText,
-    search: search
-  };
-
-  function createIndex () {
-    return {
-      shortIndexes: {},
-      fullTexts: {}
-    }
-  }
-
-  function cleanSearchText (text) {
-    text = text.replace(badCharsRe, ' ').replace(trimRe, '').toLowerCase();
-
-    for (var key in accentsReplace) {
-      if (accentsReplace.hasOwnProperty(key)) {
-        text = text.replace(accentsReplace[key], key);
-      }
-    }
-
-    return text;
-  }
-
-  function indexObject (id, searchText, searchIndex) {
-    if (searchIndex.fullTexts[id] !== undefined) {
-      return false;
-    }
-
-    searchText = cleanSearchText(searchText);
-
-    if (!searchText.length) {
-      return false;
-    }
-
-    var shortIndexes = searchIndex.shortIndexes;
-
-    searchIndex.fullTexts[id] = searchText;
-
-    angular.forEach(searchText.split(' '), function(searchWord) {
-      var len = Math.min(searchWord.length, 3),
-          wordPart, i;
-      for (i = 1; i <= len; i++) {
-        wordPart = searchWord.substr(0, i);
-        if (shortIndexes[wordPart] === undefined) {
-          shortIndexes[wordPart] = [id];
-        } else {
-          shortIndexes[wordPart].push(id);
-        }
-      }
-    });
-  }
-
-  function search (query, searchIndex) {
-    var shortIndexes = searchIndex.shortIndexes,
-        fullTexts = searchIndex.fullTexts;
-
-    query = cleanSearchText(query);
-
-    var queryWords = query.split(' '),
-        foundObjs = false,
-        newFoundObjs, i, j, searchText, found;
-
-    for (i = 0; i < queryWords.length; i++) {
-      newFoundObjs = shortIndexes[queryWords[i].substr(0, 3)];
-      if (!newFoundObjs) {
-        foundObjs = [];
-        break;
-      }
-      if (foundObjs === false || foundObjs.length > newFoundObjs.length) {
-        foundObjs = newFoundObjs;
-      }
-    }
-
-    newFoundObjs = {};
-
-    for (j = 0; j < foundObjs.length; j++) {
-      found = true;
-      searchText = fullTexts[foundObjs[j]];
-      for (i = 0; i < queryWords.length; i++) {
-        if (searchText.indexOf(queryWords[i]) == -1) {
-          found = false;
-          break;
-        }
-      }
-      if (found) {
-        newFoundObjs[foundObjs[j]] = true;
-      }
-    }
-
-    return newFoundObjs;
-  }
-})
-
 .service('ExternalResourcesManager', function ($q, $http) {
   var urlPromises = {};
 
@@ -887,6 +823,10 @@ angular.module('izhukov.utils', [])
   function onEvent (e) {
     // console.log('event', e.type);
     if (e.type == 'mousemove') {
+      var e = e.originalEvent || e;
+      if (e && e.movementX === 0 && e.movementY === 0) {
+        return;
+      }
       $($window).off('mousemove', onEvent);
     }
     var isIDLE = e.type == 'blur' || e.type == 'timeout' ? true : false;

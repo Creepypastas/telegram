@@ -4,6 +4,9 @@ var pj = require('./package.json');
 var $ = require('gulp-load-plugins')();
 var concat = require('gulp-concat');
 var path = require('path');
+var http = require('http');
+var livereload = require('gulp-livereload');
+var st = require('st');
 
 // The generated file is being created at src
 // so it can be fetched by usemin.
@@ -22,7 +25,7 @@ gulp.task('usemin', ['templates', 'enable-production'], function() {
     .pipe($.usemin({
       html: [$.minifyHtml({empty: true})],
       js: ['concat', $.ngAnnotate(), $.uglify({outSourceMap: false})],
-      css: [$.minifyCss(), 'concat']
+      css: ['concat', $.minifyCss({compatibility: true, keepBreaks: true})]
     }))
     .pipe(gulp.dest('dist'));
 });
@@ -45,6 +48,8 @@ gulp.task('copy', function() {
       .pipe(gulp.dest('dist')),
     gulp.src(['app/img/**/*.wav'])
       .pipe(gulp.dest('dist/img')),
+    // gulp.src(['app/fonts/*'])
+    //   .pipe(gulp.dest('dist/fonts')),
     gulp.src(['app/js/lib/polyfill.js', 'app/js/lib/bin_utils.js'])
       .pipe(gulp.dest('dist/js/lib')),
     gulp.src('app/vendor/closure/long.js')
@@ -142,7 +147,7 @@ gulp.task('add-appcache-manifest', function() {
   var sources = [
     './dist/**/*',
     '!dist/manifest.*',
-    '!dist/index.html',
+    '!dist/*.html',
     '!dist/fonts/*',
     '!dist/img/icons/icon*.png',
     '!dist/js/background.js'
@@ -201,6 +206,28 @@ gulp.task('package-dev', function() {
       .pipe($.replace(/(\/\*)?PRODUCTION_ONLY_END/g, '/*PRODUCTION_ONLY_END'))
       .pipe(gulp.dest('dist_package'))
     );
+});
+
+gulp.task('watchcss', function() {
+  gulp.src('app/css/*.css')
+    .pipe(livereload());
+});
+
+gulp.task('watchhtml', function() {
+  gulp.src('app/partials/**/*.html')
+    .pipe(livereload());
+});
+
+gulp.task('watch', ['server'], function() {
+  livereload.listen({ basePath: 'app' });
+  gulp.watch('app/css/*.css', ['watchcss']);
+  gulp.watch('app/partials/**/*.html', ['watchhtml']);
+});
+
+gulp.task('server', function(done) {
+  http.createServer(
+    st({ path: __dirname, index: 'index.html', cache: false })
+  ).listen(8000, done);
 });
 
 
