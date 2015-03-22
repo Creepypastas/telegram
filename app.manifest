@@ -1,27 +1,18 @@
 CACHE MANIFEST
-# Time: Sun Dec 28 2014 20:59:42 GMT+0100 (CET)
+# Time: Thu Mar 19 2015 21:52:31 GMT+0300 (MSK)
 
 
 CACHE:
-badbrowser.html
 favicon.ico
 favicon_unread.ico
 css/app.css
 css/desktop.css
 css/mobile.css
-img/T_LogoM.png
-img/T_LogoM_1x.png
+img/Telegram.png
 img/Telegram72.png
 img/Telegram72_2x.png
-img/WebIntro1.png
-img/WebIntro1_1x.png
-img/WebIntro2.png
-img/WebIntro2_1x.png
-img/WebIntro3.png
-img/WebIntro3_1x.png
-img/bg_tile.png
+img/Telegram_2x.png
 img/blank.gif
-img/decentralization.png
 img/emojisprite_0.png
 img/emojisprite_1.png
 img/emojisprite_2.png
@@ -29,14 +20,12 @@ img/emojisprite_3.png
 img/emojisprite_4.png
 img/iphone_home120.png
 img/iphone_startup.png
-img/logo_dogogram.png
 img/logo_share.png
-img/sound_a.wav
+img/sound_a.mp3
 js/app.js
 nacl/mtproto_crypto.nmf
 nacl/mtproto_crypto.pexe
 img/changelog/card_wecandoit.png
-img/changelog/search.png
 img/icons/AboutLogos_1x.png
 img/icons/AboutLogos_2x.png
 img/icons/Checks1_1x.png
